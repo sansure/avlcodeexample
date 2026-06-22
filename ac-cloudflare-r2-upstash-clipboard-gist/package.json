@@ -1,0 +1,24 @@
+{
+  "name": "ac-cloudflare-r2-upstash-clipboard-gist",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "基于 Cloudflare Workers + R2 + Upstash Redis 的云端剪贴板与代码片段分享服务",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "r2",
+    "upstash",
+    "clipboard",
+    "gist"
+  ],
+  "author": "ac",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
