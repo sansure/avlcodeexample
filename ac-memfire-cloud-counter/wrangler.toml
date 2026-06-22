@@ -1,0 +1,17 @@
+name = "ac-memfire-cloud-counter"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# 免费版 Cloudflare Workers 不支持 cpu_ms 限制，故移除
+# cpu_ms = 30000
+
+[vars]
+# 在此处填写你的 Upstash Redis REST URL（不含 token）
+# UPSTASH_REDIS_REST_URL = "https://your-redis.upstash.io"
+# 在此处填写你的 Memfire Cloud 连接字符串（可选）
+# MEMFIRE_CONNECTION_STRING = "postgresql://user:pass@host/db?sslmode=require"
+
+[[kv_namespaces]]
+# 如需使用 Cloudflare KV 作为备用存储，可取消注释并绑定
+# binding = "COUNTER_KV"
+# id = "your-kv-namespace-id"

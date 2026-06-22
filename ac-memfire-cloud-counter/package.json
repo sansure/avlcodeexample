@@ -1,0 +1,23 @@
+{
+  "name": "ac-memfire-cloud-counter",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "基于 Memfire Cloud + Cloudflare Worker + Upstash 的免费访问计数器",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "upstash",
+    "memfire",
+    "counter"
+  ],
+  "author": "ac",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
