@@ -73,7 +73,7 @@ const FRONTEND_HTML = `<!DOCTYPE html>
   </div>
 
   <script>
-    const BASE = window.location.origin;
+    const BASE = window.location.origin + window.location.pathname.replace(/\/+$/, '');
     let currentSlug = null;
 
     document.getElementById('create-btn').addEventListener('click', async () => {
@@ -134,8 +134,8 @@ const FRONTEND_HTML = `<!DOCTYPE html>
       } catch (e) { /* ignore */ }
     }
 
-    // Check if we're viewing a slug
-    const path = window.location.pathname.slice(1);
+    // Check if we're viewing a slug (strip optional /clipboard prefix)
+    const path = window.location.pathname.replace(/^\/clipboard\//, '').replace(/^\//, '');
     if (path && path !== '' && !path.startsWith('api/')) {
       document.getElementById('create-view').style.display = 'none';
       document.getElementById('view-view').style.display = 'block';
@@ -186,6 +186,13 @@ function text(body, status = 200) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // 支持通过 /clipboard/* 子路径部署：剥离前缀后再进行内部路由
+    const pathPrefix = "/clipboard";
+    if (url.pathname.startsWith(pathPrefix + "/") || url.pathname === pathPrefix) {
+      url.pathname = url.pathname.slice(pathPrefix.length) || "/";
+    }
+
     const store = createStore(env);
     const bucket = env.CLIPBOARD_BUCKET;
 
@@ -223,7 +230,7 @@ export default {
         const metadata = JSON.stringify({ slug, lang, created: now, views: 0 });
 
         // Save to Redis index
-        await store.setex(DEFAULT_PREFIX + slug, TTL_SECONDS, metadata);
+        await store.setex(DEFAULT_PREFIX + slug, TTL_SECONDS * days / 30, metadata);
         await store.lpush(RECENT_KEY, JSON.stringify({ slug, lang, preview: content.slice(0, 120), created: now }));
         await store.ltrim(RECENT_KEY, 0, RECENT_MAX - 1);
 
@@ -238,11 +245,11 @@ export default {
         } else {
           // Fallback: store content in Redis too (smaller content only)
           if (content.length < 50000) {
-            await store.setex(DEFAULT_PREFIX + "content:" + slug, TTL_SECONDS, content);
+            await store.setex(DEFAULT_PREFIX + "content:" + slug, TTL_SECONDS * days / 30, content);
           }
         }
 
-        return json({ slug, url: `${url.origin}/${slug}` });
+        return json({ slug });
       }
 
       // ── View raw content ──────────────────────────────

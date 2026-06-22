@@ -1,0 +1,16 @@
+name = "example"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# 免费版 Cloudflare Workers 不支持 cpu_ms 限制，故移除
+# cpu_ms = 30000
+
+[vars]
+# 站点主域名
+SITE_BASE_URL = "https://example.avlcodesite.xyz"
+
+[[d1_databases]]
+# 主站索引使用的 D1 数据库
+binding = "AVLCODEDB"
+database_name = "avlcodedb"
+database_id = "c7e75573-763b-44d8-89d3-4c7413b75e88"

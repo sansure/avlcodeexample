@@ -18,3 +18,8 @@ compatibility_date = "2024-01-01"
 # 绑定 R2 存储桶用于持久化内容
 # binding = "CLIPBOARD_BUCKET"
 # bucket_name = "ac-clipboard-gist"
+
+# 部署到 example.avlcodesite.xyz 的 /clipboard/* 子路径
+[[routes]]
+pattern = "example.avlcodesite.xyz/clipboard/*"
+custom_domain = true
