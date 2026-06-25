@@ -780,11 +780,6 @@ async function handleListSubmissions(request, env, ctx, url) {
     } else if (user.role === "reviewer") {
       options.reviewerId = user.id;
     }
-      const filter = url.searchParams.get("filter");
-      if (filter === "mine") {
-        options.reviewerId = user.id;
-      }
-    }
 
     const result = await listSubmissions(db, quota, options);
     return json(result);
