@@ -1,0 +1,20 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 本地 Node.js 运行时（本环境临时下载）
+.node/
+.node_tmp/
+
+# Wrangler 本地状态与配置
+.wrangler/
+.dev.vars
+
+# 构建生成的子项目路由（由 scripts/build-routes.js 生成）
+src/routes/
+
+# 本地 Cloudflare 凭证（不上传到 Git）
+credentials.json
+
+# 日志
+*.log

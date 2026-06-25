@@ -1,0 +1,32 @@
+name = "ac-cloudflare-r2-d1-gist"
+main = "src/index.js"
+compatibility_date = "2024-04-05"
+
+[vars]
+# 站点基础 URL（独立部署时生效，集成到主项目时会被主站覆盖）
+# BASE_URL = "https://your-gist-worker.your-subdomain.workers.dev"
+# 单次文件内容大小限制（字节，默认 1MB）
+# MAX_CONTENT_SIZE = "1048576"
+# 默认保留天数（1-365）
+# DEFAULT_TTL_DAYS = "30"
+
+# D1 数据库绑定（独立部署时使用 DB）
+[[d1_databases]]
+binding = "DB"
+database_name = "gistdb"
+# database_id = "your-database-id"
+
+# R2 对象存储绑定（独立部署时使用 GIST_BUCKET）
+[[r2_buckets]]
+binding = "GIST_BUCKET"
+bucket_name = "ac-gist-storage"
+# preview_bucket_name = "ac-gist-storage-preview"
+
+# 每日定时清理过期 Gist（UTC 时间 02:00）
+[triggers]
+crons = ["0 2 * * *"]
+
+# 独立部署时的自定义路由（可选）
+# [[routes]]
+# pattern = "example.avlcodesite.xyz/gist/*"
+# custom_domain = true

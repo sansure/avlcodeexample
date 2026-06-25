@@ -1,0 +1,28 @@
+{
+  "name": "ac-cloudflare-r2-d1-gist",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "基于 Cloudflare Workers + D1 + R2 的 Gist 代码片段分享服务（支持配额统计与限制）",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:migrate": "wrangler d1 execute gistdb --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute gistdb --remote --file=./schema.sql",
+    "cleanup": "wrangler trigger scheduled"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "d1",
+    "r2",
+    "gist",
+    "code-snippet",
+    "quota"
+  ],
+  "author": "ac",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.50.0"
+  }
+}

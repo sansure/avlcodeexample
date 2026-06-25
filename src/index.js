@@ -1,87 +1,14 @@
 const SITE_BASE_URL = globalThis.SITE_BASE_URL || "https://example.avlcodesite.xyz";
 
-const PROJECTS = [
-  {
-    id: "clipboard",
-    name: "Cloud Clipboard / Gist",
-    dir: "ac-cloudflare-r2-upstash-clipboard-gist",
-    desc: "基于 Cloudflare Workers + R2 + Upstash Redis 的云端剪贴板与代码片段分享服务。",
-    path: "/clipboard/",
-    status: "online",
-  },
-  {
-    id: "counter",
-    name: "免费访问计数器",
-    dir: "ac-memfire-cloud-counter",
-    desc: "基于 Memfire Cloud + Cloudflare Worker + Upstash 的免费访问计数器。",
-    path: "/counter/",
-    status: "planned",
-  },
-  {
-    id: "review-tool",
-    name: "AC 审稿小工具",
-    dir: "ac-review-tool",
-    desc: "ac 审稿小工具。",
-    path: "/review-tool/",
-    status: "planned",
-  },
-  {
-    id: "access-log",
-    name: "访问日志调度器",
-    dir: "ac-avlcode-access-log-scheduler",
-    desc: "ac 定时处理 avlcode 的访问日志。",
-    path: "/access-log/",
-    status: "planned",
-  },
-  {
-    id: "multimodal",
-    name: "多模态代码示例",
-    dir: "ac-multimodal-code-examples",
-    desc: "ac 多模态代码示例。",
-    path: "/multimodal/",
-    status: "planned",
-  },
-  {
-    id: "website-cms",
-    name: "网站内容发布系统",
-    dir: "ac-website-cms",
-    desc: "ac 制作网站内容发布系统。",
-    path: "/website-cms/",
-    status: "planned",
-  },
-  {
-    id: "user-feedback",
-    name: "AVL 用户反馈系统",
-    dir: "ac-avl-user-feedback",
-    desc: "ac 制作 avl 用户反馈系统。",
-    path: "/user-feedback/",
-    status: "planned",
-  },
-  {
-    id: "roundtable",
-    name: "圆桌会议重制版",
-    dir: "ac-roundtable-remake",
-    desc: "ac 重制圆桌会议。",
-    path: "/roundtable/",
-    status: "planned",
-  },
-  {
-    id: "zhijia-analysis",
-    name: "智甲性能分析",
-    dir: "ac-zhijia-performance-analysis",
-    desc: "ac 审查智甲代码，定位卡顿瓶颈。",
-    path: "/zhijia-analysis/",
-    status: "planned",
-  },
-  {
-    id: "serial-number",
-    name: "序列号生成与验证系统",
-    dir: "ac-serial-number-generator",
-    desc: "ac 自动生成序列号系统与验证系统。",
-    path: "/serial-number/",
-    status: "planned",
-  },
-];
+// 子项目路由（由 scripts/build-routes.js 生成）
+// 开发时如果未运行 build，routes 可能不存在，使用空对象兜底
+let routes = {};
+try {
+  const routesModule = await import("./routes/index.js");
+  routes = routesModule.routes || {};
+} catch (e) {
+  // 子项目未合并时忽略
+}
 
 const INDEX_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -262,25 +189,33 @@ const INDEX_HTML = `<!DOCTYPE html>
   </div>
 
   <script>
-    const projects = ${JSON.stringify(PROJECTS)};
-    const grid = document.getElementById('project-grid');
-    grid.innerHTML = projects.map(p => {
-      const isOnline = p.status === 'online';
-      const link = isOnline
-        ? \`<a href="\${p.path}">进入项目 →</a>\`
-        : \`<span class="placeholder">待部署</span>\`;
-      return \`
-        <article class="card \${p.status}">
-          <div class="card-header">
-            <h2>\${p.name}</h2>
-            <span class="badge \${p.status}">\${isOnline ? '● 已上线' : '○ 计划中'}</span>
-          </div>
-          <p>\${p.desc}</p>
-          \${link}
-          <div class="meta">\${p.path}</div>
-        </article>
-      \`;
-    }).join('');
+    async function loadProjects() {
+      try {
+        const res = await fetch('/api/projects');
+        const projects = await res.json();
+        const grid = document.getElementById('project-grid');
+        grid.innerHTML = projects.map(p => {
+          const isOnline = p.status === 'online';
+          const link = isOnline
+            ? \`<a href="\${p.path}">进入项目 →</a>\`
+            : \`<span class="placeholder">待部署</span>\`;
+          return \`
+            <article class="card \${p.status}">
+              <div class="card-header">
+                <h2>\${p.name}</h2>
+                <span class="badge \${p.status}">\${isOnline ? '● 已上线' : '○ 计划中'}</span>
+              </div>
+              <p>\${p.description}</p>
+              \${link}
+              <div class="meta">\${p.path}</div>
+            </article>
+          \`;
+        }).join('');
+      } catch (e) {
+        console.error('加载项目失败:', e);
+      }
+    }
+    loadProjects();
   </script>
 </body>
 </html>`;
@@ -292,29 +227,193 @@ function html(body, status = 200) {
   });
 }
 
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
+// D1: 获取项目列表
+async function getProjects(db) {
+  const { results } = await db.prepare(
+    "SELECT id, name, dir, description, path, status FROM projects ORDER BY created_at DESC"
+  ).all();
+  return results || [];
+}
+
+// D1: 记录访问日志
+async function recordAccess(db, request) {
+  const url = new URL(request.url);
+  const ip = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+  const ua = request.headers.get("User-Agent") || "";
+  try {
+    await db.prepare(
+      "INSERT INTO access_logs (path, method, ip, user_agent) VALUES (?, ?, ?, ?)"
+    ).bind(url.pathname, request.method, ip, ua).run();
+  } catch (e) {
+    console.error("记录访问日志失败:", e);
+  }
+}
+
+// R2: 列出文件
+async function listFiles(bucket) {
+  const objects = await bucket.list();
+  return (objects.objects || []).map(obj => ({
+    key: obj.key,
+    size: obj.size,
+    uploaded: obj.uploaded,
+    httpEtag: obj.httpEtag,
+  }));
+}
+
+// R2: 上传文件
+async function putFile(bucket, key, request) {
+  const contentType = request.headers.get("Content-Type") || "application/octet-stream";
+  const body = await request.arrayBuffer();
+  await bucket.put(key, body, { httpMetadata: { contentType } });
+  return { key, size: body.byteLength, contentType };
+}
+
+// R2: 读取文件
+async function getFile(bucket, key) {
+  const object = await bucket.get(key);
+  if (!object) return null;
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": object.httpMetadata?.contentType || "application/octet-stream",
+      "Content-Length": object.size,
+      "ETag": object.httpEtag,
+    },
+  });
+}
+
+// R2: 删除文件
+async function deleteFile(bucket, key) {
+  await bucket.delete(key);
+  return { success: true, key };
+}
+
+// 处理根目录自身的 API 请求
+async function handleRootApi(request, env, url) {
+  // API: 项目列表
+  if (url.pathname === "/api/projects") {
+    if (!env.AVLCODEDB) {
+      return json({ error: "D1 database not bound" }, 500);
+    }
+    const projects = await getProjects(env.AVLCODEDB);
+    return json(projects);
+  }
+
+  // API: 项目访问记录
+  if (url.pathname.startsWith("/api/projects/") && url.pathname.endsWith("/visit")) {
+    if (!env.AVLCODEDB) {
+      return json({ error: "D1 database not bound" }, 500);
+    }
+    const id = url.pathname.split("/")[3];
+    await env.AVLCODEDB.prepare(
+      "UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).bind(id).run();
+    return json({ success: true, id });
+  }
+
+  // API: R2 文件列表
+  if (url.pathname === "/api/files") {
+    if (!env.AVLCODE_BUCKET) {
+      return json({ error: "R2 bucket not bound" }, 500);
+    }
+    if (request.method === "GET") {
+      const files = await listFiles(env.AVLCODE_BUCKET);
+      return json(files);
+    }
+    if (request.method === "POST" || request.method === "PUT") {
+      return json({ error: "请使用 /api/files/:key 上传文件" }, 400);
+    }
+    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders() });
+  }
+
+  // API: R2 文件操作
+  const fileMatch = url.pathname.match(/^\/api\/files\/(.+)$/);
+  if (fileMatch) {
+    if (!env.AVLCODE_BUCKET) {
+      return json({ error: "R2 bucket not bound" }, 500);
+    }
+    const key = decodeURIComponent(fileMatch[1]);
+    if (request.method === "GET") {
+      const response = await getFile(env.AVLCODE_BUCKET, key);
+      if (!response) return json({ error: "File not found" }, 404);
+      return response;
+    }
+    if (request.method === "PUT" || request.method === "POST") {
+      const result = await putFile(env.AVLCODE_BUCKET, key, request);
+      return json(result, 201);
+    }
+    if (request.method === "DELETE") {
+      const result = await deleteFile(env.AVLCODE_BUCKET, key);
+      return json(result);
+    }
+    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders() });
+  }
+
+  return null;
+}
+
+// 处理子项目路由分发
+async function handleSubProjects(request, env, ctx, url) {
+  for (const [route, handler] of Object.entries(routes)) {
+    if (url.pathname.startsWith(route) || url.pathname === route.replace(/\/$/, "")) {
+      if (handler && typeof handler.fetch === "function") {
+        return handler.fetch(request, env, ctx);
+      }
+    }
+  }
+  return null;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // CORS 预检
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-        },
-      });
+      return new Response(null, { headers: corsHeaders() });
     }
 
-    // 主站只处理 GET 请求与根路径
-    if (request.method !== "GET") {
-      return new Response("Method Not Allowed", { status: 405 });
+    // 记录访问日志（如果 D1 已绑定）
+    if (env.AVLCODEDB) {
+      await recordAccess(env.AVLCODEDB, request);
     }
 
+    // 1. 优先处理子项目路由
+    const subResponse = await handleSubProjects(request, env, ctx, url);
+    if (subResponse) return subResponse;
+
+    // 2. 处理根目录 API
+    const apiResponse = await handleRootApi(request, env, url);
+    if (apiResponse) return apiResponse;
+
+    // 3. 首页
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return html(INDEX_HTML);
     }
 
     return new Response("Not Found", { status: 404 });
+  },
+
+  async scheduled(event, env, ctx) {
+    // 委托给 gist 子项目的定时清理任务
+    const gist = routes["/gist/"];
+    if (gist && typeof gist.scheduled === "function") {
+      console.log("Delegating scheduled event to gist subproject");
+      await gist.scheduled(event, env, ctx);
+    }
   },
 };

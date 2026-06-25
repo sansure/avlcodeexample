@@ -1,16 +1,36 @@
 name = "example"
 main = "src/index.js"
-compatibility_date = "2024-01-01"
-
-# 免费版 Cloudflare Workers 不支持 cpu_ms 限制，故移除
-# cpu_ms = 30000
+compatibility_date = "2024-04-05"
 
 [vars]
 # 站点主域名
 SITE_BASE_URL = "https://example.avlcodesite.xyz"
+# 默认保留天数（gist 子项目使用）
+# DEFAULT_TTL_DAYS = "30"
 
+# D1 数据库绑定
 [[d1_databases]]
-# 主站索引使用的 D1 数据库
 binding = "AVLCODEDB"
 database_name = "avlcodedb"
 database_id = "c7e75573-763b-44d8-89d3-4c7413b75e88"
+
+# R2 对象存储绑定（根目录使用）
+[[r2_buckets]]
+binding = "AVLCODE_BUCKET"
+bucket_name = "exampleshare"
+preview_bucket_name = "exampleshare-preview"
+
+# R2 对象存储绑定（子项目 gist 使用，指向同一个 bucket）
+[[r2_buckets]]
+binding = "GIST_BUCKET"
+bucket_name = "exampleshare"
+preview_bucket_name = "exampleshare-preview"
+
+# 主站点自定义域名（所有子路径均由主 Worker 统一路由）
+[[routes]]
+pattern = "example.avlcodesite.xyz"
+custom_domain = true
+
+# gist 子项目：每日定时清理过期 Gist（UTC 时间 02:00）
+[triggers]
+crons = ["0 2 * * *"]

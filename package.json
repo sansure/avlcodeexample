@@ -5,9 +5,13 @@
   "description": "AVL Code 示例工程集合主索引站点",
   "main": "src/index.js",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "build": "node scripts/build-routes.js",
+    "dev": "npm run build && wrangler dev --port 8902 --ip 0.0.0.0",
+    "deploy": "node scripts/deploy.js",
+    "test:local": "node scripts/test-local.js",
+    "tail": "wrangler tail",
+    "db:migrate": "wrangler d1 execute avlcodedb --local --file=./schema.sql",
+    "test": "vitest"
   },
   "keywords": [
     "cloudflare-workers",
@@ -17,6 +21,6 @@
   "author": "ac",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^3.50.0"
   }
 }
