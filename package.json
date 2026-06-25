@@ -9,8 +9,9 @@
     "dev": "npm run build && wrangler dev --port 8902 --ip 0.0.0.0",
     "deploy": "node scripts/deploy.js",
     "test:local": "node scripts/test-local.js",
-    "tail": "wrangler tail",
     "db:migrate": "wrangler d1 execute avlcodedb --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute avlcodedb --remote --file=./schema.sql",
+    "tail": "wrangler tail",
     "test": "vitest"
   },
   "keywords": [
