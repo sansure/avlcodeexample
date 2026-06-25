@@ -68,11 +68,25 @@ CREATE INDEX IF NOT EXISTS idx_review_attachments_submission ON review_attachmen
 
 -- 初始化默认用户（仅在表为空时插入，生产环境应替换为安全 Token）
 INSERT OR IGNORE INTO review_users (id, name, token, role) VALUES
-('admin', '管理员', 'admin-token-avl-review', 'admin'),
-('reviewer1', '审稿人甲', 'reviewer-token-avl-001', 'reviewer'),
-('reviewer2', '审稿人乙', 'reviewer-token-avl-002', 'reviewer'),
-('submitter1', '投稿人甲', 'submitter-token-avl-001', 'submitter'),
-('submitter2', '投稿人乙', 'submitter-token-avl-002', 'submitter');
+('admin', '管理员', 'admin', 'admin'),
+('reviewer01', '审稿人01', 'reviewer01', 'reviewer'),
+('reviewer02', '审稿人02', 'reviewer02', 'reviewer'),
+('reviewer03', '审稿人03', 'reviewer03', 'reviewer'),
+('reviewer04', '审稿人04', 'reviewer04', 'reviewer'),
+('reviewer05', '审稿人05', 'reviewer05', 'reviewer'),
+('reviewer06', '审稿人06', 'reviewer06', 'reviewer'),
+('reviewer07', '审稿人07', 'reviewer07', 'reviewer'),
+('reviewer08', '审稿人08', 'reviewer08', 'reviewer'),
+('reviewer09', '审稿人09', 'reviewer09', 'reviewer'),
+('submitter01', '投稿人01', 'submitter01', 'submitter'),
+('submitter02', '投稿人02', 'submitter02', 'submitter'),
+('submitter03', '投稿人03', 'submitter03', 'submitter'),
+('submitter04', '投稿人04', 'submitter04', 'submitter'),
+('submitter05', '投稿人05', 'submitter05', 'submitter'),
+('submitter06', '投稿人06', 'submitter06', 'submitter'),
+('submitter07', '投稿人07', 'submitter07', 'submitter'),
+('submitter08', '投稿人08', 'submitter08', 'submitter'),
+('submitter09', '投稿人09', 'submitter09', 'submitter');
 
 -- 初始化常用审稿模板
 INSERT OR IGNORE INTO review_templates (id, name, verdict, comment, created_by) VALUES

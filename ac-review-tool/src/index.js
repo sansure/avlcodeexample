@@ -48,7 +48,7 @@ function json(data, status = 200, extraHeaders = {}) {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Cookie",
+      "Access-Control-Allow-Headers": "Content-Type, Content-Disposition, Cookie",
       ...extraHeaders,
     },
   });
@@ -79,7 +79,7 @@ function corsPreflight() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Cookie",
+      "Access-Control-Allow-Headers": "Content-Type, Content-Disposition, Cookie",
     },
   });
 }
@@ -421,7 +421,7 @@ async function listUsers(db, quota) {
 }
 
 async function listSubmissions(db, quota, options = {}) {
-  const { status, category, authorId, reviewerId, page = 1, pageSize = CONFIG.DEFAULT_PAGE_SIZE } = options;
+  const { status, category, authorId, reviewerId, q, page = 1, pageSize = CONFIG.DEFAULT_PAGE_SIZE } = options;
   const conditions = [];
   const params = [];
 
@@ -440,6 +440,10 @@ async function listSubmissions(db, quota, options = {}) {
   if (reviewerId) {
     conditions.push("s.assigned_reviewer_id = ?");
     params.push(reviewerId);
+  }
+  if (q) {
+    conditions.push("s.title LIKE ?");
+    params.push("%" + q + "%");
   }
 
   const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
@@ -779,6 +783,7 @@ async function handleListSubmissions(request, env, ctx, url) {
     const options = {
       status: url.searchParams.get("status") || undefined,
       category: url.searchParams.get("category") || undefined,
+      q: url.searchParams.get("q") || undefined,
       page: url.searchParams.get("page") || 1,
       pageSize: url.searchParams.get("pageSize") || CONFIG.DEFAULT_PAGE_SIZE,
     };
@@ -879,6 +884,23 @@ async function handleUpdateSubmission(request, env, ctx, url) {
     }
 
     const updates = {};
+    if (user.role === "admin" || user.role === "submitter") {
+      if (body.title !== undefined) updates.title = body.title.trim();
+      if (body.content !== undefined) updates.content = body.content;
+      if (body.category !== undefined) updates.category = body.category;
+      if (body.tags !== undefined) updates.tags = body.tags;
+    }
+    if (user.role === "admin" || user.role === "reviewer") {
+      if (body.status !== undefined) {
+        updates.status = body.status;
+        if (body.status === "revising") {
+          updates.version = (submission.version || 1) + 1;
+        }
+      }
+    }
+    if (user.role === "admin" && body.assignedReviewerId !== undefined) {
+      updates.assignedReviewerId = body.assignedReviewerId;
+    }
     if (body.title !== undefined) updates.title = body.title.trim();
     if (body.content !== undefined) updates.content = body.content;
     if (body.category !== undefined) updates.category = body.category;
@@ -1217,6 +1239,7 @@ const APP_HTML = `<!DOCTYPE html>
     .stat { text-align: center; }
     .stat .num { font-size: 2rem; font-weight: 700; color: var(--accent); }
     .stat .label { color: var(--muted); font-size: .9rem; }
+    .stat.clickable:hover { border-color: var(--accent); transform: translateY(-2px); }
     .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
     .row label { color: var(--muted); font-size: .9rem; }
     input, textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: .65rem .9rem; font-size: .95rem; }
@@ -1275,11 +1298,11 @@ const APP_HTML = `<!DOCTYPE html>
         <h2>登录审稿小工具</h2>
         <p class="muted" style="color:var(--warn);font-size:.85rem;">⚠️ 示例工程无权限管理，Token 仅作演示用途</p>
         <p class="muted">请输入 Token 登录</p>
-        <input id="login-token" type="password" placeholder="例如：admin-token-avl-review">
+        <input id="login-token" type="password" placeholder="例如：admin、reviewer01、submitter01">
         <div class="actions">
           <button id="btn-login">登录</button>
         </div>
-        <p class="muted" style="margin-top:1rem;font-size:.8rem;">默认 Token：<br>admin-token-avl-review（管理员）<br>reviewer-token-avl-001（审稿人）<br>submitter-token-avl-001（投稿人）</p>
+        <p class="muted" style="margin-top:1rem;font-size:.8rem;">默认 Token：<br>admin（管理员）<br>reviewer01 ~ reviewer09（审稿人）<br>submitter01 ~ submitter09（投稿人）</p>
         <div id="login-error" class="error"></div>
       </div>
     </div>
@@ -1297,12 +1320,13 @@ const APP_HTML = `<!DOCTYPE html>
         <div class="card">
           <h2>稿件列表</h2>
           <div class="row">
+            <input id="filter-q" placeholder="搜索标题关键词" style="flex:1;min-width:160px;">
             <label>状态：</label>
             <select id="filter-status"><option value="">全部</option></select>
             <label>分类：</label>
             <select id="filter-category"><option value="">全部</option></select>
-            <label id="label-mine"><input type="checkbox" id="filter-mine"> 仅看我的</label>
             <button id="btn-search">查询</button>
+            <button class="secondary" id="btn-reset">重置</button>
           </div>
           <div id="list-table"></div>
           <div class="pagination" id="list-pagination"></div>
@@ -1316,6 +1340,9 @@ const APP_HTML = `<!DOCTYPE html>
           <input id="sub-category" placeholder="分类（可选）">
           <input id="sub-tags" placeholder="标签，用逗号分隔（可选）">
           <textarea id="sub-content" placeholder="在此输入正文内容..."></textarea>
+          <div style="margin:.75rem 0;color:var(--muted);font-size:.85rem;">可输入正文，也可选择文件（或两者同时提供）：</div>
+          <input type="file" id="sub-files" multiple>
+          <div id="upload-progress" class="muted" style="font-size:.85rem;"></div>
           <div class="actions">
             <button id="btn-save">保存</button>
             <button class="secondary" id="btn-cancel">取消</button>
@@ -1337,8 +1364,9 @@ const APP_HTML = `<!DOCTYPE html>
           <h3>附件</h3>
           <div id="detail-attachments"></div>
           <div id="upload-area" class="hidden" style="margin-top:.75rem;">
-            <input type="file" id="file-input">
+            <input type="file" id="file-input" multiple>
             <button id="btn-upload">上传附件</button>
+            <span id="detail-upload-progress" class="muted" style="font-size:.85rem;"></span>
           </div>
         </div>
         <div class="card" id="detail-reviews-card">
@@ -1441,15 +1469,30 @@ const APP_HTML = `<!DOCTYPE html>
         api('/api/stats').then(function(stats) {
           var html = '';
           if (stats.mySubmissions !== undefined) {
-            html += '<div class="card stat"><div class="num">' + stats.mySubmissions + '</div><div class="label">我的投稿</div></div>';
+            html += '<div class="card stat clickable" data-filter="mine-submissions" style="cursor:pointer;"><div class="num">' + stats.mySubmissions + '</div><div class="label">我的投稿</div></div>';
           }
           if (stats.myReviews !== undefined) {
-            html += '<div class="card stat"><div class="num">' + stats.myReviews + '</div><div class="label">我的审稿任务</div></div>';
+            html += '<div class="card stat clickable" data-filter="mine-reviews" style="cursor:pointer;"><div class="num">' + stats.myReviews + '</div><div class="label">我的审稿任务</div></div>';
           }
           for (var s in stats.byStatus) {
-            html += '<div class="card stat"><div class="num">' + stats.byStatus[s] + '</div><div class="label">' + statusLabel(s) + '</div></div>';
+            html += '<div class="card stat clickable" data-status="' + s + '" style="cursor:pointer;"><div class="num">' + stats.byStatus[s] + '</div><div class="label">' + statusLabel(s) + '</div></div>';
           }
           $('stats-grid').innerHTML = html || '<div class="empty">暂无数据</div>';
+          $('stats-grid').querySelectorAll('.stat.clickable').forEach(function(card) {
+            card.addEventListener('click', function() {
+              var status = card.dataset.status;
+              var filter = card.dataset.filter;
+              if (status) {
+                $('filter-status').value = status;
+                $('filter-category').value = '';
+              } else {
+                $('filter-status').value = '';
+                $('filter-category').value = '';
+              }
+              showView('list');
+              renderSubmissions(1);
+            });
+          });
         }).catch(function(e) { $('stats-grid').innerHTML = '<div class="error">' + escapeHtml(e.message) + '</div>'; });
       }
 
@@ -1457,11 +1500,11 @@ const APP_HTML = `<!DOCTYPE html>
         currentPage = page || 1;
         var status = $('filter-status').value;
         var category = $('filter-category').value;
-        var mine = $('filter-mine').checked;
+        var q = $('filter-q').value.trim();
         var qs = '?page=' + currentPage;
         if (status) qs += '&status=' + encodeURIComponent(status);
         if (category) qs += '&category=' + encodeURIComponent(category);
-        if (mine) qs += '&filter=mine';
+        if (q) qs += '&q=' + encodeURIComponent(q);
         api('/api/submissions' + qs).then(function(data) {
           var subs = data.submissions || [];
           if (subs.length === 0) {
@@ -1569,7 +1612,13 @@ const APP_HTML = `<!DOCTYPE html>
 
           var attHtml = '';
           (data.attachments || []).forEach(function(a) {
+          (data.attachments || []).forEach(function(a) {
             attHtml += '<div class="attachment">';
+            attHtml += '<span>' + escapeHtml(a.filename) + ' <span class="meta">(' + formatSize(a.size) + ')</span></span>';
+            attHtml += '<span><a class="secondary" style="padding:.4rem .8rem;border-radius:6px;display:inline-flex;align-items:center;" href="' + BASE + '/api/attachments/' + a.id + '" target="_blank">⬇ 下载</a>';
+            if (canModifySubmission(s) || a.uploaded_by === user.id) attHtml += ' <a href="#" class="delete-att" data-id="' + a.id + '">删除</a>';
+            attHtml += '</span></div>';
+          });
             attHtml += '<span>' + escapeHtml(a.filename) + ' <span class="meta">(' + formatSize(a.size) + ')</span></span>';
             attHtml += '<span><a href="' + BASE + '/api/attachments/' + a.id + '" target="_blank">下载</a>';
             if (canModifySubmission(s) || a.uploaded_by === user.id) attHtml += ' | <a href="#" class="delete-att" data-id="' + a.id + '">删除</a>';
@@ -1626,14 +1675,32 @@ const APP_HTML = `<!DOCTYPE html>
         });
         var uploadBtn = $('btn-upload');
         if (uploadBtn) uploadBtn.addEventListener('click', function() {
-          var file = $('file-input').files[0];
-          if (!file) { alert('请选择文件'); return; }
-          if (file.size > 10 * 1024 * 1024) { alert('文件不能超过 10MB'); return; }
-          api('/api/submissions/' + id + '/attachments', {
-            method: 'POST',
-            headers: { 'Content-Type': file.type || 'application/octet-stream', 'Content-Disposition': 'filename="' + file.name + '"' },
-            body: file
-          }).then(function() { $('file-input').value = ''; loadDetail(id); });
+          var files = $('file-input').files;
+          if (files.length === 0) { alert('请选择文件'); return; }
+          for (var i = 0; i < files.length; i++) {
+            if (files[i].size > 10 * 1024 * 1024) { alert('文件不能超过 10MB：' + files[i].name); return; }
+          }
+          var progress = $('detail-upload-progress');
+          var uploaded = 0;
+          progress.textContent = '正在上传 0/' + files.length + '...';
+          var chain = Promise.resolve();
+          for (var fi = 0; fi < files.length; fi++) {
+            (function(file) {
+              chain = chain.then(function() {
+                return uploadFile(file, id).then(function() {
+                  uploaded++;
+                  progress.textContent = '正在上传 ' + uploaded + '/' + files.length + '...';
+                });
+              });
+            })(files[fi]);
+          }
+          chain.then(function() {
+            $('file-input').value = '';
+            progress.textContent = '';
+            loadDetail(id);
+          }).catch(function(e) {
+            progress.textContent = '上传失败：' + e.message;
+          });
         });
         var submitReviewBtn = $('btn-submit-review');
         if (submitReviewBtn) submitReviewBtn.addEventListener('click', function() {
@@ -1674,6 +1741,10 @@ const APP_HTML = `<!DOCTYPE html>
       }
 
       function openEditForm(s) {
+        resetForm();
+        $('form-title').textContent = '编辑稿件';
+        resetForm();
+        $('form-title').textContent = '编辑稿件';
         $('form-title').textContent = '编辑稿件';
         $('sub-title').value = s.title;
         $('sub-category').value = s.category || '';
@@ -1690,8 +1761,30 @@ const APP_HTML = `<!DOCTYPE html>
         $('sub-category').value = '';
         $('sub-tags').value = '';
         $('sub-content').value = '';
+        $('sub-files').value = '';
+        $('upload-progress').textContent = '';
         $('form-error').textContent = '';
         delete $('btn-save').dataset.id;
+      }
+        $('form-title').textContent = '新建稿件';
+        $('sub-title').value = '';
+        $('sub-category').value = '';
+        $('sub-tags').value = '';
+        $('sub-content').value = '';
+        $('form-error').textContent = '';
+        delete $('btn-save').dataset.id;
+      }
+
+      function uploadFile(file, submissionId) {
+        var headers = {
+          'Content-Type': file.type || 'application/octet-stream',
+          'Content-Disposition': 'filename="' + file.name.replace(/"/g, '\\"') + '"'
+        };
+        return api('/api/submissions/' + submissionId + '/attachments', {
+          method: 'POST',
+          headers: headers,
+          body: file
+        });
       }
 
       function init() {
@@ -1724,6 +1817,17 @@ const APP_HTML = `<!DOCTYPE html>
         });
 
         $('btn-search').addEventListener('click', function() { renderSubmissions(1); });
+        $('btn-reset').addEventListener('click', function() {
+          $('filter-q').value = '';
+          $('filter-status').value = '';
+          $('filter-category').value = '';
+          renderSubmissions(1);
+        });
+        $('filter-q').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') renderSubmissions(1);
+        });
+        $('filter-status').addEventListener('change', function() { renderSubmissions(1); });
+        $('filter-category').addEventListener('change', function() { renderSubmissions(1); });
         $('filter-status').innerHTML = '<option value="">全部状态</option>' +
           '<option value="pending">待审</option>' +
           '<option value="reviewing">审核中</option>' +
@@ -1733,6 +1837,7 @@ const APP_HTML = `<!DOCTYPE html>
 
         $('btn-save').addEventListener('click', function() {
           var id = $('btn-save').dataset.id;
+          var files = $('sub-files').files;
           var payload = {
             title: $('sub-title').value.trim(),
             category: $('sub-category').value.trim(),
@@ -1740,9 +1845,33 @@ const APP_HTML = `<!DOCTYPE html>
             content: $('sub-content').value
           };
           if (!payload.title) { $('form-error').textContent = '标题不能为空'; return; }
+          if (!payload.content && files.length === 0) { $('form-error').textContent = '请至少输入正文或上传一个文件'; return; }
+          for (var i = 0; i < files.length; i++) {
+            if (files[i].size > 10 * 1024 * 1024) { $('form-error').textContent = '文件不能超过 10MB：' + files[i].name; return; }
+          }
           var method = id ? 'PUT' : 'POST';
           var path = id ? '/api/submissions/' + id : '/api/submissions';
           api(path, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(function(res) {
+              var submissionId = id || res.id;
+              if (!submissionId) throw new Error('保存稿件失败，未返回 ID');
+              if (files.length === 0) return submissionId;
+              var progress = $('upload-progress');
+              var uploaded = 0;
+              progress.textContent = '正在上传 0/' + files.length + ' 个附件...';
+              var chain = Promise.resolve();
+              for (var fi = 0; fi < files.length; fi++) {
+                (function(file) {
+                  chain = chain.then(function() {
+                    return uploadFile(file, submissionId).then(function() {
+                      uploaded++;
+                      progress.textContent = '正在上传 ' + uploaded + '/' + files.length + ' 个附件...';
+                    });
+                  });
+                })(files[fi]);
+              }
+              return chain.then(function() { return submissionId; });
+            })
             .then(function() { showView('list'); renderSubmissions(1); renderStats(); })
             .catch(function(e) { $('form-error').textContent = e.message; });
         });
@@ -1770,7 +1899,8 @@ const APP_HTML = `<!DOCTYPE html>
         $('btn-new').classList.toggle('hidden', user.role === 'reviewer');
         $('welcome-title').textContent = '欢迎，' + user.name;
         $('welcome-role').innerHTML = '角色：' + roleLabel(user.role) + ' <span style="color:var(--warn);font-size:.85rem;">（示例工程无权限管理）</span>';
-        $('label-mine').classList.add('hidden');
+        $('btn-new').classList.toggle('hidden', user.role === 'reviewer');
+        $('btn-templates').classList.toggle('hidden', user.role !== 'admin');
         $('welcome-title').textContent = '欢迎，' + user.name;
         $('welcome-role').textContent = '角色：' + roleLabel(user.role);
         loadFilters();
