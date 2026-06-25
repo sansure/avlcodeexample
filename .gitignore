@@ -10,9 +10,6 @@ package-lock.json
 .wrangler/
 .dev.vars
 
-# 构建生成的子项目路由（由 scripts/build-routes.js 生成）
-src/routes/
-
 # 本地 Cloudflare 凭证（不上传到 Git）
 credentials.json
 

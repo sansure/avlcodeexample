@@ -3,9 +3,11 @@ const SITE_BASE_URL = globalThis.SITE_BASE_URL || "https://example.avlcodesite.x
 // 子项目路由（由 scripts/build-routes.js 生成）
 // 开发时如果未运行 build，routes 可能不存在，使用空对象兜底
 let routes = {};
+let subProjectList = [];
 try {
   const routesModule = await import("./routes/index.js");
   routes = routesModule.routes || {};
+  subProjectList = routesModule.subProjectList || [];
 } catch (e) {
   // 子项目未合并时忽略
 }
@@ -306,10 +308,25 @@ async function deleteFile(bucket, key) {
 async function handleRootApi(request, env, url) {
   // API: 项目列表
   if (url.pathname === "/api/projects") {
-    if (!env.AVLCODEDB) {
-      return json({ error: "D1 database not bound" }, 500);
+    let projects = [];
+    if (env.AVLCODEDB) {
+      try {
+        projects = await getProjects(env.AVLCODEDB);
+      } catch (e) {
+        console.error("从 D1 读取项目列表失败:", e);
+      }
     }
-    const projects = await getProjects(env.AVLCODEDB);
+    // D1 无数据时回退到构建生成的子项目列表
+    if (!projects || projects.length === 0) {
+      projects = subProjectList.map(p => ({
+        id: p.name,
+        name: p.name,
+        dir: "",
+        description: p.description,
+        path: p.route,
+        status: "online",
+      }));
+    }
     return json(projects);
   }
 
