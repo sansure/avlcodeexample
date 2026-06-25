@@ -1,0 +1,25 @@
+{
+  "name": "ac-review-tool",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "基于 Cloudflare Workers + D1 + R2 的审稿小工具（共享 R2/D1 配额限制）",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev --port 8903 --ip 0.0.0.0",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute reviewdb --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute reviewdb --remote --file=./schema.sql",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "review-tool",
+    "d1",
+    "r2"
+  ],
+  "author": "ac",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.50.0"
+  }
+}

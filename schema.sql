@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS r2_files (
 INSERT OR IGNORE INTO projects (id, name, dir, description, path, status) VALUES
 ('gist', 'Gist 代码片段分享', 'ac-cloudflare-r2-d1-gist', '基于 Cloudflare Workers + D1 + R2 的 Gist 代码片段分享服务（支持配额统计与限制）。', '/gist/', 'online'),
 ('counter', '免费访问计数器', 'ac-memfire-cloud-counter', '基于 Memfire Cloud + Cloudflare Worker + Upstash 的免费访问计数器。', '/counter/', 'planned'),
-('review-tool', 'AC 审稿小工具', 'ac-review-tool', 'ac 审稿小工具。', '/review-tool/', 'planned'),
+('review-tool', 'AC 审稿小工具', 'ac-review-tool', 'ac 审稿小工具：稿件提交、分配审稿人、审稿意见与附件管理（共享 R2/D1 配额限制）。', '/review/', 'online'),
 ('access-log', '访问日志调度器', 'ac-avlcode-access-log-scheduler', 'ac 定时处理 avlcode 的访问日志。', '/access-log/', 'planned'),
 ('multimodal', '多模态代码示例', 'ac-multimodal-code-examples', 'ac 多模态代码示例。', '/multimodal/', 'planned'),
 ('website-cms', '网站内容发布系统', 'ac-website-cms', 'ac 制作网站内容发布系统。', '/website-cms/', 'planned'),
@@ -104,3 +104,80 @@ CREATE TABLE IF NOT EXISTS d1_quota (
 );
 
 CREATE INDEX IF NOT EXISTS idx_d1_quota_day ON d1_quota(day);
+
+
+-- ============================================================
+-- ac-review-tool 子项目表（审稿小工具）
+-- 复用 r2_quota / d1_quota 配额统计表
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS review_users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL CHECK(role IN ('submitter','reviewer','admin')),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS review_submissions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  author_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  category TEXT,
+  tags TEXT,
+  status TEXT DEFAULT 'pending' CHECK(status IN ('pending','reviewing','approved','rejected','revising')),
+  assigned_reviewer_id TEXT,
+  version INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS review_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id TEXT NOT NULL,
+  reviewer_id TEXT NOT NULL,
+  verdict TEXT NOT NULL CHECK(verdict IN ('approved','rejected','revising')),
+  comment TEXT,
+  score INTEGER CHECK(score BETWEEN 1 AND 5),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS review_attachments (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  content_type TEXT,
+  size INTEGER DEFAULT 0,
+  r2_key TEXT NOT NULL,
+  uploaded_by TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS review_templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  verdict TEXT NOT NULL,
+  comment TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_submissions_author ON review_submissions(author_id);
+CREATE INDEX IF NOT EXISTS idx_review_submissions_status ON review_submissions(status);
+CREATE INDEX IF NOT EXISTS idx_review_submissions_reviewer ON review_submissions(assigned_reviewer_id);
+CREATE INDEX IF NOT EXISTS idx_review_reviews_submission ON review_reviews(submission_id);
+CREATE INDEX IF NOT EXISTS idx_review_attachments_submission ON review_attachments(submission_id);
+
+INSERT OR IGNORE INTO review_users (id, name, token, role) VALUES
+('admin', '管理员', 'admin-token-avl-review', 'admin'),
+('reviewer1', '审稿人甲', 'reviewer-token-avl-001', 'reviewer'),
+('reviewer2', '审稿人乙', 'reviewer-token-avl-002', 'reviewer'),
+('submitter1', '投稿人甲', 'submitter-token-avl-001', 'submitter'),
+('submitter2', '投稿人乙', 'submitter-token-avl-002', 'submitter');
+
+INSERT OR IGNORE INTO review_templates (id, name, verdict, comment, created_by) VALUES
+('tpl-approve-1', '通过：质量优秀', 'approved', '稿件内容完整、逻辑清晰，建议直接通过。', 'admin'),
+('tpl-reject-1', '拒绝：方向不符', 'rejected', '稿件主题与当前栏目方向不符，建议退稿。', 'admin'),
+('tpl-revise-1', '需修改：补充细节', 'revising', '整体方向可行，但需补充实验细节与数据支撑，请修改后重新提交。', 'admin'),
+('tpl-revise-2', '需修改：格式问题', 'revising', '内容尚可，但格式与引用规范存在较多问题，请按模板调整后重投。', 'admin');
