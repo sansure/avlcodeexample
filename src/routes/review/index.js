@@ -1797,9 +1797,9 @@ const APP_HTML = `<!DOCTYPE html>
       function openEditForm(s) {
         resetForm();
         $('form-title').textContent = '编辑稿件';
-        resetForm();
-        $('form-title').textContent = '编辑稿件';
-        $('form-title').textContent = '编辑稿件';
+        $('sub-title').value = s.title;
+        $('sub-category').value = s.category || '';
+        $('sub-tags').value = s.tags || '';
         $('sub-title').value = s.title;
         $('sub-category').value = s.category || '';
         $('sub-tags').value = s.tags || '';
@@ -1819,15 +1819,6 @@ const APP_HTML = `<!DOCTYPE html>
         $('upload-progress').textContent = '';
         $('form-error').textContent = '';
         delete $('btn-save').dataset.id;
-      }
-        $('form-title').textContent = '新建稿件';
-        $('sub-title').value = '';
-        $('sub-category').value = '';
-        $('sub-tags').value = '';
-        $('sub-content').value = '';
-        $('form-error').textContent = '';
-        delete $('btn-save').dataset.id;
-      }
 
       function uploadFile(file, submissionId) {
         var headers = {
@@ -1846,13 +1837,30 @@ const APP_HTML = `<!DOCTYPE html>
           if (data.user) { setUser(data.user); } else { showLogin(); }
         }).catch(showLogin);
 
-        $('btn-login').addEventListener('click', function() {
+        function doLogin() {
           var token = $('login-token').value.trim();
+          if (!token) return;
+          $('btn-login').disabled = true;
+          $('btn-login').textContent = '登录中...';
+          $('login-error').textContent = '';
           api('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: token })
-          }).then(function(data) { setUser(data.user); }).catch(function(e) { $('login-error').textContent = e.message; });
+          }).then(function(data) {
+            $('btn-login').disabled = false;
+            $('btn-login').textContent = '登录';
+            setUser(data.user);
+          }).catch(function(e) {
+            $('btn-login').disabled = false;
+            $('btn-login').textContent = '登录';
+            $('login-error').textContent = e.message;
+          });
+        }
+
+        $('btn-login').addEventListener('click', doLogin);
+        $('login-token').addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') { doLogin(); }
         });
 
         $('btn-logout').addEventListener('click', function() {
