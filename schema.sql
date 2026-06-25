@@ -169,7 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_review_submissions_reviewer ON review_submissions
 CREATE INDEX IF NOT EXISTS idx_review_reviews_submission ON review_reviews(submission_id);
 CREATE INDEX IF NOT EXISTS idx_review_attachments_submission ON review_attachments(submission_id);
 
-INSERT OR IGNORE INTO review_users (id, name, token, role) VALUES
+INSERT OR REPLACE INTO review_users (id, name, token, role) VALUES
 ('admin', '管理员', 'admin', 'admin'),
 ('reviewer01', '审稿人01', 'reviewer01', 'reviewer'),
 ('reviewer02', '审稿人02', 'reviewer02', 'reviewer'),

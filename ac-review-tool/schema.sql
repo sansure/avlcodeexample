@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_review_reviews_submission ON review_reviews(submi
 CREATE INDEX IF NOT EXISTS idx_review_attachments_submission ON review_attachments(submission_id);
 
 -- 初始化默认用户（仅在表为空时插入，生产环境应替换为安全 Token）
-INSERT OR IGNORE INTO review_users (id, name, token, role) VALUES
+INSERT OR REPLACE INTO review_users (id, name, token, role) VALUES
 ('admin', '管理员', 'admin', 'admin'),
 ('reviewer01', '审稿人01', 'reviewer01', 'reviewer'),
 ('reviewer02', '审稿人02', 'reviewer02', 'reviewer'),

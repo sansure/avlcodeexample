@@ -730,7 +730,6 @@ async function withQuota(env, handler) {
       }, 500);
     }
     return json({ error: err.message }, 500);
-    return json({ error: err.message }, 500);
   } finally {
     await quota.flush();
   }
