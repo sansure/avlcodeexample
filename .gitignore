@@ -12,6 +12,7 @@ package-lock.json
 
 # 本地 Cloudflare 凭证（不上传到 Git）
 credentials.json
+credentials.example.json
 
 # 日志
 *.log
