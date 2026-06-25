@@ -718,6 +718,14 @@ async function withQuota(env, handler) {
       return json({ error: err.message, code: "FORBIDDEN" }, 403);
     }
     console.error("Handler error:", err);
+    if (err.message && err.message.includes("no such table")) {
+      return json({
+        error: "数据库表不存在，请先执行迁移：npm run db:migrate（本地）或 npm run db:migrate:remote（远程）",
+        code: "D1_SCHEMA_MISSING",
+        detail: err.message,
+      }, 500);
+    }
+    return json({ error: err.message }, 500);
     return json({ error: err.message }, 500);
   } finally {
     await quota.flush();
@@ -1252,6 +1260,7 @@ const APP_HTML = `<!DOCTYPE html>
   <div class="container">
     <header id="app-header" class="hidden">
       <h1>AC 审稿小工具</h1>
+      <span class="badge" style="background:rgba(245,158,11,.15);color:var(--warn);">示例工程无权限管理</span>
       <div class="nav" id="main-nav">
         <button data-view="dashboard" class="active">看板</button>
         <button data-view="list">稿件列表</button>
@@ -1264,6 +1273,7 @@ const APP_HTML = `<!DOCTYPE html>
     <div id="login-view">
       <div class="card login-box">
         <h2>登录审稿小工具</h2>
+        <p class="muted" style="color:var(--warn);font-size:.85rem;">⚠️ 示例工程无权限管理，Token 仅作演示用途</p>
         <p class="muted">请输入 Token 登录</p>
         <input id="login-token" type="password" placeholder="例如：admin-token-avl-review">
         <div class="actions">
@@ -1758,7 +1768,8 @@ const APP_HTML = `<!DOCTYPE html>
         $('login-view').classList.add('hidden');
         $('app-view').classList.remove('hidden');
         $('btn-new').classList.toggle('hidden', user.role === 'reviewer');
-        $('btn-templates').classList.toggle('hidden', user.role !== 'admin');
+        $('welcome-title').textContent = '欢迎，' + user.name;
+        $('welcome-role').innerHTML = '角色：' + roleLabel(user.role) + ' <span style="color:var(--warn);font-size:.85rem;">（示例工程无权限管理）</span>';
         $('label-mine').classList.add('hidden');
         $('welcome-title').textContent = '欢迎，' + user.name;
         $('welcome-role').textContent = '角色：' + roleLabel(user.role);

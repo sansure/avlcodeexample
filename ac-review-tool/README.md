@@ -18,6 +18,9 @@
 
 ## 本地开发
 
+
+**注意：首次运行前必须先执行数据库迁移，否则会出现 `D1_ERROR: no such table: review_users`。**
+
 ```bash
 npm install
 npm run db:migrate
