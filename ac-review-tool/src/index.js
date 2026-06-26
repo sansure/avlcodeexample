@@ -409,7 +409,7 @@ function canReview(submission, user) {
   if (!user) return false;
   if (user.role === "admin") return true;
   if (user.role !== "reviewer") return false;
-  return submission.assigned_reviewer_id === user.id;
+  return submission.assigned_reviewer_id === user.id || submission.assigned_reviewer_id === null;
 }
 
 // ==================== D1 存储层 ====================
@@ -1815,7 +1815,7 @@ const APP_HTML = `<!DOCTYPE html>
         if (!user) return false;
         if (user.role === 'admin') return true;
         if (user.role !== 'reviewer') return false;
-        return s.assigned_reviewer_id === user.id;
+        return s.assigned_reviewer_id === user.id || s.assigned_reviewer_id === null;
       }
 
       function formatSize(bytes) {
