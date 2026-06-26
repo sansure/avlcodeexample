@@ -421,7 +421,7 @@ async function listUsers(db, quota) {
 }
 
 async function listSubmissions(db, quota, options = {}) {
-  const { status, category, authorId, reviewerId, q, page = 1, pageSize = CONFIG.DEFAULT_PAGE_SIZE } = options;
+  const { status, category, authorId, reviewerUserId, q, page = 1, pageSize = CONFIG.DEFAULT_PAGE_SIZE } = options;
   const conditions = [];
   const params = [];
 
@@ -433,18 +433,13 @@ async function listSubmissions(db, quota, options = {}) {
     conditions.push("s.category = ?");
     params.push(category);
   }
-  if (authorId && reviewerId) {
-    conditions.push("(s.author_id = ? OR s.assigned_reviewer_id = ?)");
-    params.push(authorId, reviewerId);
-  } else {
-    if (authorId) {
-      conditions.push("s.author_id = ?");
-      params.push(authorId);
-    }
-    if (reviewerId) {
-      conditions.push("s.assigned_reviewer_id = ?");
-      params.push(reviewerId);
-    }
+  if (authorId) {
+    conditions.push("s.author_id = ?");
+    params.push(authorId);
+  }
+  if (reviewerUserId) {
+    conditions.push("(s.assigned_reviewer_id = ? OR s.assigned_reviewer_id IS NULL OR EXISTS (SELECT 1 FROM review_reviews r WHERE r.submission_id = s.id AND r.reviewer_id = ?))");
+    params.push(reviewerUserId, reviewerUserId);
   }
 
   const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
@@ -637,33 +632,54 @@ async function getStats(db, quota, user) {
   const stats = {};
 
   if (!quota.checkD1Read(1)) throw new QuotaError("D1 read quota exceeded", "D1_READ_EXCEEDED");
-  const statusResult = await db
-    .prepare("SELECT status, COUNT(*) as count FROM review_submissions GROUP BY status")
-    .all();
-  quota.recordD1Read(statusResult.results.length);
-  stats.byStatus = {};
-  for (const row of statusResult.results || []) {
-    stats.byStatus[row.status] = row.count;
+
+  if (!user || user.role === "admin") {
+    const statusResult = await db
+      .prepare("SELECT status, COUNT(*) as count FROM review_submissions GROUP BY status")
+      .all();
+    quota.recordD1Read(statusResult.results.length);
+    stats.byStatus = {};
+    for (const row of statusResult.results || []) {
+      stats.byStatus[row.status] = row.count;
+    }
   }
 
-  if (user) {
-    if (!quota.checkD1Read(1)) throw new QuotaError("D1 read quota exceeded", "D1_READ_EXCEEDED");
+  if (user && user.role === "submitter") {
+    const statusResult = await db
+      .prepare("SELECT status, COUNT(*) as count FROM review_submissions WHERE author_id = ? GROUP BY status")
+      .bind(user.id)
+      .all();
+    quota.recordD1Read(statusResult.results.length);
+    stats.byStatus = {};
+    for (const row of statusResult.results || []) {
+      stats.byStatus[row.status] = row.count;
+    }
+
     const mySubmissions = await db
       .prepare("SELECT COUNT(*) as count FROM review_submissions WHERE author_id = ?")
       .bind(user.id)
       .first();
     quota.recordD1Read(1);
     stats.mySubmissions = mySubmissions?.count || 0;
+  }
 
-    if (user.role === "reviewer" || user.role === "admin") {
-      if (!quota.checkD1Read(1)) throw new QuotaError("D1 read quota exceeded", "D1_READ_EXCEEDED");
-      const myReviews = await db
-        .prepare("SELECT COUNT(*) as count FROM review_submissions WHERE assigned_reviewer_id = ?")
-        .bind(user.id)
-        .first();
-      quota.recordD1Read(1);
-      stats.myReviews = myReviews?.count || 0;
+  if (user && user.role === "reviewer") {
+    const statusResult = await db
+      .prepare(`SELECT status, COUNT(*) as count FROM review_submissions s WHERE s.assigned_reviewer_id = ? OR s.assigned_reviewer_id IS NULL OR EXISTS (SELECT 1 FROM review_reviews r WHERE r.submission_id = s.id AND r.reviewer_id = ?) GROUP BY status`)
+      .bind(user.id, user.id)
+      .all();
+    quota.recordD1Read(statusResult.results.length);
+    stats.byStatus = {};
+    for (const row of statusResult.results || []) {
+      stats.byStatus[row.status] = row.count;
     }
+
+    const myReviews = await db
+      .prepare(`SELECT COUNT(*) as count FROM review_submissions s WHERE s.assigned_reviewer_id = ? OR s.assigned_reviewer_id IS NULL OR EXISTS (SELECT 1 FROM review_reviews r WHERE r.submission_id = s.id AND r.reviewer_id = ?)`)
+      .bind(user.id, user.id)
+      .first();
+    quota.recordD1Read(1);
+    stats.myReviews = myReviews?.count || 0;
   }
 
   return stats;
@@ -846,15 +862,7 @@ async function handleListSubmissions(request, env, ctx, url) {
     if (user.role === "submitter") {
       options.authorId = user.id;
     } else if (user.role === "reviewer") {
-      const filter = url.searchParams.get("filter");
-      if (filter === "mine-submissions") {
-        options.authorId = user.id;
-      } else if (filter === "mine-reviews") {
-        options.reviewerId = user.id;
-      } else {
-        options.authorId = user.id;
-        options.reviewerId = user.id;
-      }
+      options.reviewerUserId = user.id;
     }
 
     const result = await listSubmissions(db, quota, options);
@@ -877,8 +885,13 @@ async function handleGetSubmission(request, env, ctx, url) {
     if (user.role === "submitter" && submission.author_id !== user.id) {
       return json({ error: "Forbidden" }, 403);
     }
-    if (user.role === "reviewer" && submission.assigned_reviewer_id !== user.id && submission.author_id !== user.id) {
-      return json({ error: "Forbidden" }, 403);
+    if (user.role === "reviewer") {
+      const canView = submission.assigned_reviewer_id === user.id ||
+        submission.assigned_reviewer_id === null ||
+        (await db.prepare("SELECT 1 as ok FROM review_reviews WHERE submission_id = ? AND reviewer_id = ? LIMIT 1").bind(submission.id, user.id).first())?.ok === 1;
+      if (!canView) {
+        return json({ error: "Forbidden" }, 403);
+      }
     }
 
     const reviews = await listReviews(db, quota, id);
@@ -1168,8 +1181,13 @@ async function handleDownloadAttachment(request, env, ctx, url) {
     if (user.role === "submitter" && submission.author_id !== user.id) {
       return json({ error: "Forbidden" }, 403);
     }
-    if (user.role === "reviewer" && submission.assigned_reviewer_id !== user.id && submission.author_id !== user.id) {
-      return json({ error: "Forbidden" }, 403);
+    if (user.role === "reviewer") {
+      const canView = submission.assigned_reviewer_id === user.id ||
+        submission.assigned_reviewer_id === null ||
+        (await db.prepare("SELECT 1 as ok FROM review_reviews WHERE submission_id = ? AND reviewer_id = ? LIMIT 1").bind(submission.id, user.id).first())?.ok === 1;
+      if (!canView) {
+        return json({ error: "Forbidden" }, 403);
+      }
     }
 
     const r2 = new R2Store(bucket, quota);
@@ -1553,20 +1571,13 @@ const APP_HTML = `<!DOCTYPE html>
           $('stats-grid').querySelectorAll('.stat.clickable').forEach(function(card) {
             card.addEventListener('click', function() {
               var status = card.dataset.status;
-              var filter = card.dataset.filter;
               if (status) {
                 $('filter-status').value = status;
-                $('filter-category').value = '';
-                currentListFilter = '';
-              } else if (filter) {
-                $('filter-status').value = '';
-                $('filter-category').value = '';
-                currentListFilter = filter;
               } else {
                 $('filter-status').value = '';
-                $('filter-category').value = '';
-                currentListFilter = '';
               }
+              $('filter-category').value = '';
+              currentListFilter = '';
               showView('list');
               renderSubmissions(1);
             });
