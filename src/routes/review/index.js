@@ -1691,16 +1691,10 @@ const APP_HTML = `<!DOCTYPE html>
 
           var attHtml = '';
           (data.attachments || []).forEach(function(a) {
-          (data.attachments || []).forEach(function(a) {
             attHtml += '<div class="attachment">';
             attHtml += '<span>' + escapeHtml(a.filename) + ' <span class="meta">(' + formatSize(a.size) + ')</span></span>';
             attHtml += '<span><a class="secondary" style="padding:.4rem .8rem;border-radius:6px;display:inline-flex;align-items:center;" href="' + BASE + '/api/attachments/' + a.id + '" target="_blank">⬇ 下载</a>';
             if (canModifySubmission(s) || a.uploaded_by === user.id) attHtml += ' <a href="#" class="delete-att" data-id="' + a.id + '">删除</a>';
-            attHtml += '</span></div>';
-          });
-            attHtml += '<span>' + escapeHtml(a.filename) + ' <span class="meta">(' + formatSize(a.size) + ')</span></span>';
-            attHtml += '<span><a href="' + BASE + '/api/attachments/' + a.id + '" target="_blank">下载</a>';
-            if (canModifySubmission(s) || a.uploaded_by === user.id) attHtml += ' | <a href="#" class="delete-att" data-id="' + a.id + '">删除</a>';
             attHtml += '</span></div>';
           });
           $('detail-attachments').innerHTML = attHtml || '<div class="empty">暂无附件</div>';
