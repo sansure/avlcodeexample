@@ -1800,9 +1800,6 @@ const APP_HTML = `<!DOCTYPE html>
         $('sub-title').value = s.title;
         $('sub-category').value = s.category || '';
         $('sub-tags').value = s.tags || '';
-        $('sub-title').value = s.title;
-        $('sub-category').value = s.category || '';
-        $('sub-tags').value = s.tags || '';
         $('sub-content').value = s.content;
         $('form-error').textContent = '';
         $('btn-save').dataset.id = s.id;
@@ -1819,6 +1816,7 @@ const APP_HTML = `<!DOCTYPE html>
         $('upload-progress').textContent = '';
         $('form-error').textContent = '';
         delete $('btn-save').dataset.id;
+      }
 
       function uploadFile(file, submissionId) {
         var headers = {
