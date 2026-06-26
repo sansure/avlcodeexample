@@ -1102,6 +1102,14 @@ async function handleUploadAttachment(request, env, ctx, url) {
     const contentType = request.headers.get("Content-Type") || "application/octet-stream";
     const contentDisposition = request.headers.get("Content-Disposition") || "";
     let filename = "unnamed";
+    const urlFilename = url.searchParams.get("filename");
+    if (urlFilename) {
+      try { filename = decodeURIComponent(urlFilename); } catch (e) { filename = urlFilename; }
+    } else {
+      const contentDisposition = request.headers.get("Content-Disposition") || "";
+      const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+      if (filenameMatch) filename = filenameMatch[1];
+    }
     const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
     if (filenameMatch) filename = filenameMatch[1];
 
@@ -1819,13 +1827,12 @@ const APP_HTML = `<!DOCTYPE html>
       }
 
       function uploadFile(file, submissionId) {
-        var headers = {
-          'Content-Type': file.type || 'application/octet-stream',
-          'Content-Disposition': 'filename="' + file.name.replace(/"/g, '\\"') + '"'
-        };
-        return api('/api/submissions/' + submissionId + '/attachments', {
+        var encodedFilename = encodeURIComponent(file.name);
+        return api('/api/submissions/' + submissionId + '/attachments?filename=' + encodedFilename, {
           method: 'POST',
-          headers: headers,
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream'
+          },
           body: file
         });
       }
