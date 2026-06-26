@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// 本地开发启动脚本
-// 由于沙箱环境没有全局 npm/node，此脚本通过绝对路径调用 wrangler
+// 本地 D1 迁移脚本
 
 import { spawn } from "child_process";
 import path from "path";
@@ -8,16 +7,16 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
-const port = process.argv[2] || "8902";
 
 const nodeBin = path.join(root, ".node/bin/node");
 const wranglerBin = path.join(root, "node_modules/wrangler/bin/wrangler.js");
 
-console.log(`🚀 启动本地开发服务器 (port ${port})...`);
-console.log(`   node: ${nodeBin}`);
-console.log(`   wrangler: ${wranglerBin}`);
+const args = [wranglerBin, "d1", "execute", "avlcodedb", "--local", "--file=./schema.sql"];
 
-const child = spawn(nodeBin, [wranglerBin, "dev", "--port", port, "--ip", "0.0.0.0"], {
+console.log("🚀 执行本地 D1 迁移...");
+console.log(`   ${args.join(" ")}`);
+
+const child = spawn(nodeBin, args, {
   cwd: root,
   stdio: "inherit",
   env: process.env,
