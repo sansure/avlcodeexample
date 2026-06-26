@@ -433,17 +433,18 @@ async function listSubmissions(db, quota, options = {}) {
     conditions.push("s.category = ?");
     params.push(category);
   }
-  if (authorId) {
-    conditions.push("s.author_id = ?");
-    params.push(authorId);
-  }
-  if (reviewerId) {
-    conditions.push("s.assigned_reviewer_id = ?");
-    params.push(reviewerId);
-  }
-  if (q) {
-    conditions.push("s.title LIKE ?");
-    params.push("%" + q + "%");
+  if (authorId && reviewerId) {
+    conditions.push("(s.author_id = ? OR s.assigned_reviewer_id = ?)");
+    params.push(authorId, reviewerId);
+  } else {
+    if (authorId) {
+      conditions.push("s.author_id = ?");
+      params.push(authorId);
+    }
+    if (reviewerId) {
+      conditions.push("s.assigned_reviewer_id = ?");
+      params.push(reviewerId);
+    }
   }
 
   const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
@@ -845,7 +846,15 @@ async function handleListSubmissions(request, env, ctx, url) {
     if (user.role === "submitter") {
       options.authorId = user.id;
     } else if (user.role === "reviewer") {
-      options.reviewerId = user.id;
+      const filter = url.searchParams.get("filter");
+      if (filter === "mine-submissions") {
+        options.authorId = user.id;
+      } else if (filter === "mine-reviews") {
+        options.reviewerId = user.id;
+      } else {
+        options.authorId = user.id;
+        options.reviewerId = user.id;
+      }
     }
 
     const result = await listSubmissions(db, quota, options);
@@ -1487,6 +1496,7 @@ const APP_HTML = `<!DOCTYPE html>
       var templates = [];
       var users = [];
       var currentPage = 1;
+      var currentListFilter = "";
 
       function $(id) { return document.getElementById(id); }
 
@@ -1547,9 +1557,15 @@ const APP_HTML = `<!DOCTYPE html>
               if (status) {
                 $('filter-status').value = status;
                 $('filter-category').value = '';
+                currentListFilter = '';
+              } else if (filter) {
+                $('filter-status').value = '';
+                $('filter-category').value = '';
+                currentListFilter = filter;
               } else {
                 $('filter-status').value = '';
                 $('filter-category').value = '';
+                currentListFilter = '';
               }
               showView('list');
               renderSubmissions(1);
@@ -1564,6 +1580,7 @@ const APP_HTML = `<!DOCTYPE html>
         var category = $('filter-category').value;
         var q = $('filter-q').value.trim();
         var qs = '?page=' + currentPage;
+        if (currentListFilter) qs += '&filter=' + encodeURIComponent(currentListFilter);
         if (status) qs += '&status=' + encodeURIComponent(status);
         if (category) qs += '&category=' + encodeURIComponent(category);
         if (q) qs += '&q=' + encodeURIComponent(q);
@@ -1876,6 +1893,7 @@ const APP_HTML = `<!DOCTYPE html>
           btn.addEventListener('click', function() {
             var view = btn.dataset.view;
             if (view === 'new') { resetForm(); }
+            if (view === 'list') { currentListFilter = ''; }
             showView(view);
             if (view === 'list') renderSubmissions(1);
             if (view === 'dashboard') renderStats();
@@ -1888,6 +1906,7 @@ const APP_HTML = `<!DOCTYPE html>
           $('filter-q').value = '';
           $('filter-status').value = '';
           $('filter-category').value = '';
+          currentListFilter = '';
           renderSubmissions(1);
         });
         $('filter-q').addEventListener('keydown', function(e) {
